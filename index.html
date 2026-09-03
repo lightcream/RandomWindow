@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>随机浮动监控窗口</title>
+    <title>随音乐跳动的监控窗口</title>
     <style>
-        /* 基础网页样式，隐藏滚动条，背景深色 */
+        /* 基础网页样式 */
         body {
             margin: 0;
             padding: 0;
@@ -27,22 +27,32 @@
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            width: 280px;
+            width: 320px;
             transition: opacity 0.3s ease;
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
-        .setting-item {
+        .setting-section {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 8px;
             margin-bottom: 15px;
+            border: 1px solid #e9ecef;
         }
 
+        .setting-item { margin-bottom: 12px; }
         .setting-item label {
             display: block;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: bold;
             margin-bottom: 5px;
+            color: #555;
         }
 
-        .setting-item input {
+        .setting-item input[type="number"],
+        .setting-item input[type="file"],
+        .setting-item select {
             width: 100%;
             padding: 6px;
             box-sizing: border-box;
@@ -50,6 +60,8 @@
             border-radius: 4px;
         }
 
+        .radio-group { display: flex; gap: 10px; font-size: 14px; }
+        
         button {
             background-color: #007bff;
             color: white;
@@ -60,6 +72,7 @@
             font-weight: bold;
             width: 100%;
             margin-bottom: 10px;
+            transition: background 0.2s;
         }
 
         button:hover { background-color: #0056b3; }
@@ -69,7 +82,6 @@
         .btn-secondary { background-color: #6c757d; }
         .btn-secondary:hover { background-color: #5a6268; }
 
-        /* 隐藏后的恢复按钮 */
         #show-panel-btn {
             position: absolute;
             top: 20px;
@@ -79,17 +91,20 @@
             display: none;
         }
 
-        /* 视频容器样式 */
         #monitor-video {
             position: absolute;
-            display: none; /* 初始隐藏 */
+            display: none;
             background-color: #000;
             border: 2px solid #fff;
             border-radius: 8px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            /* 如果希望窗口移动时有平滑动画，取消下面这行的注释 */
-            /* transition: all 0.2s ease-out; */ 
         }
+
+        /* 隐藏音乐控制面板的特定部分 */
+        #music-settings { display: none; }
+        #audio-player { width: 100%; margin-top: 10px; outline: none; }
+        
+        .tip { font-size: 11px; color: #888; margin-top: 3px; display: block; }
     </style>
 </head>
 <body>
@@ -97,31 +112,63 @@
     <button id="show-panel-btn">显示设置面板</button>
 
     <div id="control-panel">
-        <h3 style="margin-top: 0; text-align: center;">监控设置</h3>
+        <h3 style="margin-top: 0; text-align: center; color: #222;">监控与音乐设置</h3>
         
-        <div class="setting-item">
-            <label>刷新间隔 X (秒):</label>
-            <input type="number" id="interval-input" value="3" min="0.5" step="0.5">
-        </div>
-        
-        <div class="setting-item">
-            <label>窗口最小宽度 (像素):</label>
-            <input type="number" id="min-width-input" value="200" min="50">
+        <div class="setting-section">
+            <div class="setting-item">
+                <label>窗口宽度范围 (像素):</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="number" id="min-width-input" value="200" min="50" placeholder="最小">
+                    <span style="line-height: 28px;">-</span>
+                    <input type="number" id="max-width-input" value="600" min="100" placeholder="最大">
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <label>刷新触发模式:</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="mode" value="time" checked> 固定时间</label>
+                    <label><input type="radio" name="mode" value="music"> 音乐节奏</label>
+                </div>
+            </div>
         </div>
 
-        <div class="setting-item">
-            <label>窗口最大宽度 (像素):</label>
-            <input type="number" id="max-width-input" value="600" min="100">
+        <div id="time-settings" class="setting-section">
+            <div class="setting-item">
+                <label>刷新间隔 (秒):</label>
+                <input type="number" id="interval-input" value="3" min="0.1" step="0.5">
+            </div>
         </div>
 
-        <button id="start-btn">选择窗口并开始</button>
-        <button id="stop-btn" class="btn-danger" disabled>停止</button>
+        <div id="music-settings" class="setting-section">
+            <div class="setting-item">
+                <label>上传音乐文件 (MP3, WAV 等):</label>
+                <input type="file" id="audio-upload" accept="audio/*">
+                <audio id="audio-player" controls></audio>
+            </div>
+            
+            <div class="setting-item">
+                <label>节奏触发阈值 (%):</label>
+                <input type="number" id="threshold-input" value="130" min="100" step="5">
+                <span class="tip">当瞬间音量大于最近平均音量的该百分比时触发(推荐120-150)</span>
+            </div>
+
+            <div class="setting-item">
+                <label>最小冷却时间 (秒):</label>
+                <input type="number" id="cooldown-input" value="0.3" min="0.1" step="0.1">
+                <span class="tip">防止一瞬间连续闪烁多次</span>
+            </div>
+        </div>
+
+        <button id="start-btn">1. 选择窗口并开始</button>
+        <button id="stop-btn" class="btn-danger" disabled>停止监控</button>
         <button id="hide-panel-btn" class="btn-secondary">隐藏设置面板</button>
     </div>
 
     <video id="monitor-video" autoplay playsinline muted></video>
 
     <script>
+        // DOM 元素获取
         const video = document.getElementById('monitor-video');
         const startBtn = document.getElementById('start-btn');
         const stopBtn = document.getElementById('stop-btn');
@@ -129,47 +176,91 @@
         const showPanelBtn = document.getElementById('show-panel-btn');
         const controlPanel = document.getElementById('control-panel');
         
-        const intervalInput = document.getElementById('interval-input');
         const minWidthInput = document.getElementById('min-width-input');
         const maxWidthInput = document.getElementById('max-width-input');
+        
+        const modeRadios = document.getElementsByName('mode');
+        const timeSettings = document.getElementById('time-settings');
+        const musicSettings = document.getElementById('music-settings');
+        
+        const intervalInput = document.getElementById('interval-input');
+        
+        const audioUpload = document.getElementById('audio-upload');
+        const audioPlayer = document.getElementById('audio-player');
+        const thresholdInput = document.getElementById('threshold-input');
+        const cooldownInput = document.getElementById('cooldown-input');
 
         let stream = null;
+        let currentMode = 'time'; // 'time' 或 'music'
+        
+        // 定时器相关
         let refreshIntervalId = null;
+        
+        // Web Audio API 相关
+        let audioCtx = null;
+        let analyser = null;
+        let audioSource = null;
+        let animationFrameId = null;
+        let energyHistory = [];
+        let lastJumpTime = 0;
 
-        // 隐藏和显示面板逻辑
+        // UI：面板隐藏与显示
         hidePanelBtn.addEventListener('click', () => {
             controlPanel.style.display = 'none';
             showPanelBtn.style.display = 'block';
         });
-
         showPanelBtn.addEventListener('click', () => {
             controlPanel.style.display = 'block';
             showPanelBtn.style.display = 'none';
         });
 
-        // 核心：请求分享窗口并播放
+        // UI：模式切换逻辑
+        modeRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                currentMode = e.target.value;
+                if (currentMode === 'time') {
+                    timeSettings.style.display = 'block';
+                    musicSettings.style.display = 'none';
+                    if (stream) startFixedTimeRefresh();
+                } else {
+                    timeSettings.style.display = 'none';
+                    musicSettings.style.display = 'block';
+                    if (stream) startMusicRhythmRefresh();
+                }
+            });
+        });
+
+        // 音乐文件上传处理
+        audioUpload.addEventListener('change', function(e) {
+            const file = this.files[0];
+            if (file) {
+                const objectUrl = URL.createObjectURL(file);
+                audioPlayer.src = objectUrl;
+            }
+        });
+
+        // 核心：请求分享窗口
         startBtn.addEventListener('click', async () => {
             try {
-                // 请求用户授权共享屏幕/窗口
                 stream = await navigator.mediaDevices.getDisplayMedia({ 
                     video: { cursor: "always" }, 
                     audio: false 
                 });
-                
                 video.srcObject = stream;
                 video.style.display = 'block';
-                
                 startBtn.disabled = true;
                 stopBtn.disabled = false;
 
-                // 等待视频元数据加载，获取画面原始比例
                 video.onloadedmetadata = () => {
-                    startRandomRefresh();
+                    updateVideoPositionAndSize(); // 立即显示一次
+                    if (currentMode === 'time') {
+                        startFixedTimeRefresh();
+                    } else {
+                        startMusicRhythmRefresh();
+                    }
                 };
 
-                // 监听用户点击浏览器自带的“停止共享”按钮
                 stream.getVideoTracks()[0].onended = stopMonitoring;
-
             } catch (err) {
                 console.error("获取窗口画面失败: ", err);
                 alert("无法获取屏幕共享，请确保你授予了权限。");
@@ -185,41 +276,116 @@
             }
             video.srcObject = null;
             video.style.display = 'none';
+            
             clearInterval(refreshIntervalId);
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
             
             startBtn.disabled = false;
             stopBtn.disabled = true;
         }
 
-        // 启动随机刷新定时器
-        function startRandomRefresh() {
+        // ====== 模式1：固定时间刷新 ======
+        function startFixedTimeRefresh() {
             clearInterval(refreshIntervalId);
-            updateVideoPositionAndSize(); // 立即执行一次
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
             const intervalMs = parseFloat(intervalInput.value) * 1000;
             refreshIntervalId = setInterval(updateVideoPositionAndSize, intervalMs);
         }
 
-        // 监听时间输入框变化，实时更新刷新频率
         intervalInput.addEventListener('change', () => {
-            if (stream && video.srcObject) {
-                startRandomRefresh();
+            if (stream && currentMode === 'time') startFixedTimeRefresh();
+        });
+
+
+        // ====== 模式2：音乐节奏刷新 (Web Audio API) ======
+        function initAudioContext() {
+            if (!audioCtx) {
+                // 初始化音频上下文
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 256; // 采样率大小，决定了频段的细腻度
+
+                audioSource = audioCtx.createMediaElementSource(audioPlayer);
+                audioSource.connect(analyser);
+                analyser.connect(audioCtx.destination);
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function startMusicRhythmRefresh() {
+            clearInterval(refreshIntervalId);
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            
+            initAudioContext();
+            energyHistory = [];
+            analyzeAudio(); // 开始监听节奏
+        }
+
+        function analyzeAudio() {
+            if (currentMode !== 'music' || !stream) return;
+            animationFrameId = requestAnimationFrame(analyzeAudio);
+
+            // 如果音乐没播放，就不处理
+            if (audioPlayer.paused) return;
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(dataArray); // 获取当前频率能量数据
+
+            // 1. 计算当前帧的总能量平均值
+            let currentEnergy = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                currentEnergy += dataArray[i];
+            }
+            currentEnergy = currentEnergy / dataArray.length;
+
+            // 2. 维护历史平均能量池 (保留大约 1 秒的历史记录用于对比)
+            energyHistory.push(currentEnergy);
+            if (energyHistory.length > 60) {
+                energyHistory.shift(); 
+            }
+
+            // 如果历史数据太少，先不触发
+            if (energyHistory.length < 20) return;
+
+            // 3. 计算历史平均能量
+            const avgEnergy = energyHistory.reduce((a, b) => a + b, 0) / energyHistory.length;
+
+            // 4. 获取用户设置的阈值和冷却时间
+            const thresholdRatio = parseFloat(thresholdInput.value) / 100; // 例如 130% -> 1.3
+            const cooldownMs = parseFloat(cooldownInput.value) * 1000; // 秒转毫秒
+            const now = Date.now();
+
+            // 5. 核心判定逻辑：当前能量 > 历史平均值 * 阈值，并且过了冷却时间，且声音不是太小（底噪）
+            if (currentEnergy > avgEnergy * thresholdRatio && 
+                (now - lastJumpTime > cooldownMs) && 
+                currentEnergy > 15) {
+                
+                updateVideoPositionAndSize();
+                lastJumpTime = now;
+            }
+        }
+
+        // 当用户点击播放音乐时，确保 AudioContext 被激活 (浏览器安全策略要求)
+        audioPlayer.addEventListener('play', () => {
+            if (currentMode === 'music') {
+                initAudioContext();
             }
         });
 
-        // 随机更新位置和大小
+
+        // ====== 通用：随机更新位置和大小的方法 ======
         function updateVideoPositionAndSize() {
             const minW = parseInt(minWidthInput.value);
             const maxW = parseInt(maxWidthInput.value);
             
-            // 获取画面的宽高比
             const aspectRatio = video.videoWidth / video.videoHeight || 16 / 9;
 
-            // 1. 计算随机宽度
             let newWidth = Math.floor(Math.random() * (maxW - minW + 1)) + minW;
             let newHeight = newWidth / aspectRatio;
 
-            // 防止超出当前浏览器视口大小
             if (newWidth > window.innerWidth) {
                 newWidth = window.innerWidth - 20;
                 newHeight = newWidth / aspectRatio;
@@ -229,15 +395,12 @@
                 newWidth = newHeight * aspectRatio;
             }
 
-            // 2. 计算边界，确保窗口不会刷新到屏幕外面
             const maxLeft = window.innerWidth - newWidth;
             const maxTop = window.innerHeight - newHeight;
 
-            // 3. 计算随机位置
             const randomLeft = Math.floor(Math.random() * (maxLeft > 0 ? maxLeft : 0));
             const randomTop = Math.floor(Math.random() * (maxTop > 0 ? maxTop : 0));
 
-            // 4. 应用样式到视频元素
             video.style.width = `${newWidth}px`;
             video.style.height = `${newHeight}px`;
             video.style.left = `${randomLeft}px`;
