@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>随机浮动监控窗口</title>
+    <style>
+        /* 基础网页样式，隐藏滚动条，背景深色 */
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #1e1e1e;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
+        }
+
+        /* 设置面板样式 */
+        #control-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            width: 280px;
+            transition: opacity 0.3s ease;
+        }
+
+        .setting-item {
+            margin-bottom: 15px;
+        }
+
+        .setting-item label {
+            display: block;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .setting-item input {
+            width: 100%;
+            padding: 6px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #a0c4ff; cursor: not-allowed; }
+        .btn-danger { background-color: #dc3545; }
+        .btn-danger:hover { background-color: #a71d2a; }
+        .btn-secondary { background-color: #6c757d; }
+        .btn-secondary:hover { background-color: #5a6268; }
+
+        /* 隐藏后的恢复按钮 */
+        #show-panel-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1001;
+            width: auto;
+            display: none;
+        }
+
+        /* 视频容器样式 */
+        #monitor-video {
+            position: absolute;
+            display: none; /* 初始隐藏 */
+            background-color: #000;
+            border: 2px solid #fff;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            /* 如果希望窗口移动时有平滑动画，取消下面这行的注释 */
+            /* transition: all 0.2s ease-out; */ 
+        }
+    </style>
+</head>
+<body>
+
+    <button id="show-panel-btn">显示设置面板</button>
+
+    <div id="control-panel">
+        <h3 style="margin-top: 0; text-align: center;">监控设置</h3>
+        
+        <div class="setting-item">
+            <label>刷新间隔 X (秒):</label>
+            <input type="number" id="interval-input" value="3" min="0.5" step="0.5">
+        </div>
+        
+        <div class="setting-item">
+            <label>窗口最小宽度 (像素):</label>
+            <input type="number" id="min-width-input" value="200" min="50">
+        </div>
+
+        <div class="setting-item">
+            <label>窗口最大宽度 (像素):</label>
+            <input type="number" id="max-width-input" value="600" min="100">
+        </div>
+
+        <button id="start-btn">选择窗口并开始</button>
+        <button id="stop-btn" class="btn-danger" disabled>停止</button>
+        <button id="hide-panel-btn" class="btn-secondary">隐藏设置面板</button>
+    </div>
+
+    <video id="monitor-video" autoplay playsinline muted></video>
+
+    <script>
+        const video = document.getElementById('monitor-video');
+        const startBtn = document.getElementById('start-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const hidePanelBtn = document.getElementById('hide-panel-btn');
+        const showPanelBtn = document.getElementById('show-panel-btn');
+        const controlPanel = document.getElementById('control-panel');
+        
+        const intervalInput = document.getElementById('interval-input');
+        const minWidthInput = document.getElementById('min-width-input');
+        const maxWidthInput = document.getElementById('max-width-input');
+
+        let stream = null;
+        let refreshIntervalId = null;
+
+        // 隐藏和显示面板逻辑
+        hidePanelBtn.addEventListener('click', () => {
+            controlPanel.style.display = 'none';
+            showPanelBtn.style.display = 'block';
+        });
+
+        showPanelBtn.addEventListener('click', () => {
+            controlPanel.style.display = 'block';
+            showPanelBtn.style.display = 'none';
+        });
+
+        // 核心：请求分享窗口并播放
+        startBtn.addEventListener('click', async () => {
+            try {
+                // 请求用户授权共享屏幕/窗口
+                stream = await navigator.mediaDevices.getDisplayMedia({ 
+                    video: { cursor: "always" }, 
+                    audio: false 
+                });
+                
+                video.srcObject = stream;
+                video.style.display = 'block';
+                
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+
+                // 等待视频元数据加载，获取画面原始比例
+                video.onloadedmetadata = () => {
+                    startRandomRefresh();
+                };
+
+                // 监听用户点击浏览器自带的“停止共享”按钮
+                stream.getVideoTracks()[0].onended = stopMonitoring;
+
+            } catch (err) {
+                console.error("获取窗口画面失败: ", err);
+                alert("无法获取屏幕共享，请确保你授予了权限。");
+            }
+        });
+
+        // 停止监控
+        stopBtn.addEventListener('click', stopMonitoring);
+
+        function stopMonitoring() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            video.srcObject = null;
+            video.style.display = 'none';
+            clearInterval(refreshIntervalId);
+            
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+        }
+
+        // 启动随机刷新定时器
+        function startRandomRefresh() {
+            clearInterval(refreshIntervalId);
+            updateVideoPositionAndSize(); // 立即执行一次
+
+            const intervalMs = parseFloat(intervalInput.value) * 1000;
+            refreshIntervalId = setInterval(updateVideoPositionAndSize, intervalMs);
+        }
+
+        // 监听时间输入框变化，实时更新刷新频率
+        intervalInput.addEventListener('change', () => {
+            if (stream && video.srcObject) {
+                startRandomRefresh();
+            }
+        });
+
+        // 随机更新位置和大小
+        function updateVideoPositionAndSize() {
+            const minW = parseInt(minWidthInput.value);
+            const maxW = parseInt(maxWidthInput.value);
+            
+            // 获取画面的宽高比
+            const aspectRatio = video.videoWidth / video.videoHeight || 16 / 9;
+
+            // 1. 计算随机宽度
+            let newWidth = Math.floor(Math.random() * (maxW - minW + 1)) + minW;
+            let newHeight = newWidth / aspectRatio;
+
+            // 防止超出当前浏览器视口大小
+            if (newWidth > window.innerWidth) {
+                newWidth = window.innerWidth - 20;
+                newHeight = newWidth / aspectRatio;
+            }
+            if (newHeight > window.innerHeight) {
+                newHeight = window.innerHeight - 20;
+                newWidth = newHeight * aspectRatio;
+            }
+
+            // 2. 计算边界，确保窗口不会刷新到屏幕外面
+            const maxLeft = window.innerWidth - newWidth;
+            const maxTop = window.innerHeight - newHeight;
+
+            // 3. 计算随机位置
+            const randomLeft = Math.floor(Math.random() * (maxLeft > 0 ? maxLeft : 0));
+            const randomTop = Math.floor(Math.random() * (maxTop > 0 ? maxTop : 0));
+
+            // 4. 应用样式到视频元素
+            video.style.width = `${newWidth}px`;
+            video.style.height = `${newHeight}px`;
+            video.style.left = `${randomLeft}px`;
+            video.style.top = `${randomTop}px`;
+        }
+    </script>
+</body>
+</html>
